@@ -1,0 +1,46 @@
+:root {
+  --primary-blue: #2C7FB8;
+  --secondary-teal: #26C6DA;
+  --accent-purple: #7E57C2;
+  --light-bg: #F5F9FC;
+  --dark-text: #2C3E50;
+  --white: #FFFFFF;
+}
+
+body {
+  background-color: var(--light-bg);
+  color: var(--dark-text);
+  font-family: 'Roboto', sans-serif;
+}
+
+.app-header {
+  background-color: var(--white);
+}
+
+.logo h1 {
+  color: var(--primary-blue);
+}
+
+.main-nav a {
+  color: var(--dark-text);
+}
+
+.main-nav a:hover {
+  color: var(--secondary-teal);
+}
+
+.module-card:nth-child(1) {
+  background: linear-gradient(135deg, var(--primary-blue), #1565C0);
+}
+
+.module-card:nth-child(2) {
+  background: linear-gradient(135deg, var(--secondary-teal), #00ACC1);
+}
+
+.module-card:nth-child(3) {
+  background: linear-gradient(135deg, var(--accent-purple), #5E35B1);
+}
+
+.app-footer {
+  background-color: var(--white);
+}

@@ -1,0 +1,195 @@
+/* Main container */
+.home-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Background Video */
+.bg-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
+
+/* Hero Section */
+.hero-section {
+  text-align: center;
+  background-color: transparent;
+  padding: 60px 20px;
+  margin-bottom: 40px;
+  box-shadow: none;
+  border-radius: 15px;
+}
+
+.hero-section h1 {
+  color: white;
+  font-family: 'Orbitron', 'Rajdhani', 'Montserrat', sans-serif;
+  font-size: 3rem;
+  text-shadow: 0 0 10px rgba(0, 195, 255, 0.8), 0 0 20px rgba(0, 195, 255, 0.4);
+  letter-spacing: 2px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 15px;
+  position: relative;
+  display: inline-block;
+}
+
+.hero-section h1:after {
+  content: '';
+  position: absolute;
+  left: 25%;
+  bottom: -10px;
+  width: 50%;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(0,212,255,0) 0%, rgba(0,212,255,1) 50%, rgba(0,212,255,0) 100%);
+}
+
+.hero-section p {
+  color: #e0e0ff;
+  font-family: 'Rajdhani', 'Montserrat', sans-serif;
+  font-size: 1.4rem;
+  max-width: 700px;
+  margin: 20px auto 0;
+  text-shadow: 0 0 8px rgba(0, 150, 255, 0.6);
+  letter-spacing: 1px;
+}
+
+/* Modules Section */
+.modules-section {
+  margin-bottom: 1rem;
+}
+
+.modules-section h2 {
+  color: white;
+  font-size: 2.2rem;
+  text-align: center;
+  margin-bottom: 30px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+  font-weight: 600;
+}
+
+.modules-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 40px;
+}
+
+/* Module Cards */
+.module-card {
+  width: 250px;
+  height: 250px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: white;
+  padding: 25px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  outline: 3px solid rgba(255, 255, 255, 0.8);
+  outline-offset: -3px;
+  background-color: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 31, 63, 0.1);
+}
+
+.module-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+}
+
+.module-card:nth-child(1)::before {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.7), rgba(21, 101, 192, 0.7));
+}
+
+.module-card:nth-child(2)::before {
+  background: linear-gradient(135deg, rgba(0, 188, 212, 0.7), rgba(0, 172, 193, 0.7));
+}
+
+.module-card:nth-child(3)::before {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.7), rgba(94, 53, 177, 0.7));
+}
+
+.module-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  outline-color: rgba(255, 255, 255, 1);
+}
+
+.module-card h3 {
+  font-size: 1.4rem;
+  margin-bottom: 15px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+}
+
+.module-card p {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+}
+
+.module-icon {
+  font-size: 3.5rem;
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .modules-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .hero-section h1 {
+    font-size: 2rem;
+  }
+  
+  .module-card {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+/* Typing effect container */
+.typing-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+/* Typing effect for the main title */
+.typing-effect {
+  font-family: 'Orbitron', 'Rajdhani', 'Montserrat', sans-serif;
+  font-size: 3rem;
+  color: white;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(0, 195, 255, 0.8), 0 0 20px rgba(0, 195, 255, 0.4);
+  letter-spacing: 2px;
+  position: relative;
+  width: fit-content;
+  max-width: 90%;
+  text-align: center;
+  margin: 0 auto;
+}

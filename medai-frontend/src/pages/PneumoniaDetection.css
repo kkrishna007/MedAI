@@ -1,0 +1,132 @@
+/* src/pages/PneumoniaDetection.css */
+.pneumonia-detection-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.description {
+  margin-bottom: 20px;
+  color: #666;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.file-input-container {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-input-label {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  background-color: #e3f2fd;
+  color: #0d47a1;
+  border: 2px dashed #2196f3;
+  border-radius: 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.file-input-label:hover {
+  background-color: #bbdefb;
+}
+
+.image-preview {
+  width: 100%;
+  max-width: 400px;
+  margin: 20px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.image-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.analyze-button {
+  padding: 12px 30px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.analyze-button:hover {
+  background-color: #1976d2;
+}
+
+.analyze-button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.result-container {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.result-header h2 {
+  margin-right: 20px;
+  margin-bottom: 10px;
+}
+
+.result-badge {
+  padding: 8px 16px;
+  border-radius: 20px;
+  color: white;
+  font-weight: bold;
+  margin-right: 15px;
+  margin-bottom: 10px;
+}
+
+.result-badge.pneumonia {
+  background-color: #f44336;
+}
+
+.result-badge.normal {
+  background-color: #4caf50;
+}
+
+.confidence {
+  font-size: 14px;
+  color: #757575;
+  background-color: #f5f5f5;
+  padding: 5px 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}

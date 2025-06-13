@@ -1,0 +1,19 @@
+.app-footer {
+  background-color: #f8f9fa;
+  padding: 1.5rem 0;
+  margin-top: 2rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.app-footer .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.app-footer p {
+  color: #6c757d;
+  margin: 0;
+  font-size: 0.9rem;
+}
