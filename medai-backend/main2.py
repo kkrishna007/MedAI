@@ -1047,47 +1047,103 @@ def blindness_shap(model, img_np):
     try:
         # Preprocess
         img_input = img_np[np.newaxis, ...]  # shape (1, H, W, C)
-        pred_class = int(np.argmax(model.predict(img_input)))
-
-        # Background: use 5 copies of the same image (or better: a dataset mean)
-        background = np.stack([img_np] * 5, axis=0)
-
+        pred_probs = model.predict(img_input)
+        pred_class = int(np.argmax(pred_probs))
+        
+        logger.debug(f"📊 Model output shape: {pred_probs.shape}")
+        logger.debug(f"📊 Predicted class: {pred_class}")
+        
+        # Create appropriate background - use varied samples for better SHAP performance
+        background = np.zeros((5, *img_np.shape), dtype=np.float32)
+        for i in range(5):
+            # Create diverse background samples
+            noise_factor = 0.1 + (i * 0.1)  # 0.1, 0.2, 0.3, 0.4, 0.5
+            background[i] = img_np * noise_factor
+        
         # Ensure model outputs a single tensor
         if isinstance(model.output, list):
             model = tf.keras.Model(inputs=model.input, outputs=model.output[0])
-
+        
+        # Force CPU execution to avoid GPU memory issues
         with tf.device('/CPU:0'):
-            explainer = shap.GradientExplainer((model.input, model.output), background)
-        shap_values = explainer.shap_values(img_input, nsamples=25)
-
-
-        # Get SHAP values for the predicted class
-        shap_vals = shap_values[pred_class][0]  # shape (H, W, C)
-
-        # ✅ Reduce to grayscale via mean absolute
+            explainer = shap.GradientExplainer(model, background)
+            shap_values = explainer.shap_values(img_input)
+        
+        logger.debug(f"📊 SHAP values type: {type(shap_values)}")
+        
+        # **CRITICAL FIX: Handle different SHAP return formats**
+        if isinstance(shap_values, list):
+            logger.debug(f"📊 SHAP values list length: {len(shap_values)}")
+            
+            # Check if pred_class is within bounds
+            if pred_class >= len(shap_values):
+                logger.warning(f"⚠️ pred_class {pred_class} >= shap_values length {len(shap_values)}, using class 0")
+                pred_class = 0
+            
+            # Extract SHAP values for the predicted class
+            if len(shap_values[pred_class]) > 0:
+                shap_vals = shap_values[pred_class][0]  # shape (H, W, C)
+            else:
+                logger.error(f"❌ Empty SHAP values for class {pred_class}")
+                return None
+                
+        elif not isinstance(shap_values, list):
+            # Single output case: SHAP values is directly an array
+            if len(shap_values.shape) > 3:  # (batch, height, width, channels, classes)
+                if pred_class < shap_values.shape[-1]:
+                    shap_vals = shap_values[0, :, :, :, pred_class]
+                else:
+                    logger.warning(f"⚠️ pred_class {pred_class} >= output classes {shap_values.shape[-1]}, using last class")
+                    shap_vals = shap_values[0, :, :, :, -1]
+            else:  # (batch, height, width, channels)
+                shap_vals = shap_values[0]
+        else:
+            logger.error(f"❌ Unexpected SHAP format: pred_class={pred_class}, shap_values type={type(shap_values)}")
+            return None
+        
+        logger.debug(f"📊 Final SHAP values shape: {shap_vals.shape}")
+        logger.debug(f"📊 SHAP values range: {shap_vals.min():.6f} to {shap_vals.max():.6f}")
+        
+        # **Reduce to grayscale via mean absolute**
         shap_gray = np.mean(np.abs(shap_vals), axis=-1)
-
-        # Normalize to [0, 255]
-        shap_norm = (shap_gray - shap_gray.min()) / (shap_gray.max() - shap_gray.min() + 1e-8)
-        shap_uint8 = np.uint8(shap_norm * 255)
-
-        # Resize to original image shape (from 224x224 if needed)
+        
+        # **Enhanced normalization with bounds checking**
+        shap_range = shap_gray.max() - shap_gray.min()
+        logger.debug(f"📊 SHAP grayscale range: {shap_range:.6f}")
+        
+        if shap_range > 1e-8:
+            shap_norm = (shap_gray - shap_gray.min()) / shap_range
+        else:
+            logger.warning("⚠️ SHAP values have very small range, using uniform distribution")
+            shap_norm = np.ones_like(shap_gray) * 0.5  # Uniform mid-range
+        
+        shap_uint8 = np.clip(shap_norm * 255, 0, 255).astype(np.uint8)
+        
+        # **Resize to original image shape if needed**
         if shap_uint8.shape != img_np.shape[:2]:
             shap_uint8 = cv2.resize(shap_uint8, (img_np.shape[1], img_np.shape[0]))
-
-        # Apply colormap
+            logger.debug(f"📐 Resized SHAP from {shap_gray.shape} to {shap_uint8.shape}")
+        
+        # **Apply colormap**
         shap_colored = cv2.applyColorMap(shap_uint8, cv2.COLORMAP_JET)
-
-        # Convert original image to uint8 for overlay
-        original_uint8 = (img_np * 255).astype(np.uint8)
-
-        # Overlay
+        
+        # **Convert original image to uint8 for overlay**
+        if img_np.max() <= 1.0:
+            original_uint8 = (img_np * 255).astype(np.uint8)
+        else:
+            original_uint8 = img_np.astype(np.uint8)
+        
+        # **Create overlay**
         overlay = cv2.addWeighted(original_uint8, 0.6, shap_colored, 0.4, 0)
+        
+        logger.info("✅ Enhanced blindness SHAP successfully generated")
         return overlay
-
+        
     except Exception as e:
-        logger.error(f"SHAP failed: {e}")
+        logger.error(f"❌ Enhanced blindness SHAP failed: {e}")
+        logger.error(f"🔍 Full traceback: {traceback.format_exc()}")
         return None
+
 
 
 @app.post("/predict/blindness")
@@ -1104,36 +1160,28 @@ async def predict_blindness(file: UploadFile = File(...)):
             prediction = blindness_model.predict(processed_image)
             predicted_class = int(np.argmax(prediction[0]))
             confidence = float(prediction[0][predicted_class])
-            # Adjust confidence for frontend as per requirements
-            if confidence > 0.90:
-                frontend_confidence = confidence
-            else:
-                import random
-                frontend_confidence = round(random.uniform(85, 90), 2) / 100
             severity_map = {
                 0: "No DR", 1: "Mild DR", 2: "Moderate DR",
                 3: "Severe DR", 4: "Proliferative DR"
             }
-
             # Grad-CAM
             gradcam_img = blindness_gradcam(blindness_model, processed_image, original_image)
             gradcam_img_b64 = image_to_base64(gradcam_img) if gradcam_img is not None else None
-
             # LIME
             lime_img = blindness_lime(blindness_model, original_image)
             lime_img_b64 = image_to_base64(lime_img) if lime_img is not None else None
-
-            # SHAP
+            # SHAP (with attention fallback)
             shap_img = blindness_shap(blindness_model, original_image)
-            if shap_img is None:
-                logger.info("🔄 SHAP failed, using attention visualization fallback for blindness module.")
-                shap_img = create_attention_visualization(original_image, predicted_class, confidence)
-            shap_img_b64 = image_to_base64(shap_img) if shap_img is not None else None
-
+            if shap_img is not None:
+                shap_img_b64 = image_to_base64(shap_img)
+            else:
+                logger.warning("⚠️ Blindness SHAP failed, using attention visualization fallback")
+                fallback_img = blindness_attention_visualization(original_image, predicted_class, confidence)
+                shap_img_b64 = image_to_base64(fallback_img)
             result = {
                 "prediction": predicted_class,
                 "severity": severity_map[predicted_class],
-                "confidence": frontend_confidence,
+                "confidence": confidence,
                 "raw_prediction": prediction[0].tolist(),
                 "explanation": {
                     "gradcam_image": gradcam_img_b64,

@@ -71,9 +71,8 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "app", "models")
 
-BLINDNESS_MODEL_PATH = os.path.join(MODEL_DIR, "inceptionV3_full.keras")
+BLINDNESS_MODEL_PATH = os.path.join(MODEL_DIR, "blindness_model.h5")
 BRAIN_TUMOR_MODEL_PATH = os.path.join(MODEL_DIR, "brain_tumor.h5")
-BRAIN_XAI_MODEL_PATH = os.path.join(MODEL_DIR, "vgg16.h5")
 PNEUMONIA_MODEL_PATH = os.path.join(MODEL_DIR, "pneumonia_detection_Vision_Model.h5")
 
 # Enhanced path logging
@@ -740,8 +739,20 @@ def generate_pneumonia_explanation(predicted_class, confidence):
 blindness_model = None
 brain_tumor_model = None
 pneumonia_model = None
-xai_model = None
 
+def create_blindness_model():
+    with PerformanceLogger("Blindness Model Creation"):
+        from tensorflow.keras.applications import DenseNet121
+        from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout
+        from tensorflow.keras.models import Model
+        
+        base_model = DenseNet121(include_top=False, weights=None, input_shape=(224, 224, 3))
+        x = GlobalAveragePooling2D()(base_model.output)
+        x = Dense(256, activation='relu')(x)
+        x = Dropout(0.5)(x)
+        predictions = Dense(5, activation='softmax')(x)
+        model = Model(inputs=base_model.input, outputs=predictions)
+        return model
 
 # Load models with enhanced logging
 logger.info("🚀 Starting model loading process...")
@@ -749,7 +760,8 @@ logger.info("🚀 Starting model loading process...")
 if os.path.exists(BLINDNESS_MODEL_PATH):
     try:
         with PerformanceLogger("Blindness Model Loading"):
-            blindness_model=tf.keras.models.load_model(BLINDNESS_MODEL_PATH)
+            blindness_model = create_blindness_model()
+            blindness_model.load_weights(BLINDNESS_MODEL_PATH)
             logger.info("✅ Blindness model loaded successfully")
     except Exception as e:
         logger.error(f"❌ Error loading blindness model: {e}")
@@ -761,14 +773,6 @@ if os.path.exists(BRAIN_TUMOR_MODEL_PATH):
             logger.info("✅ Brain tumor model loaded successfully")
     except Exception as e:
         logger.error(f"❌ Error loading brain tumor model: {e}")
-
-if os.path.exists(BRAIN_XAI_MODEL_PATH):
-    try:
-        with PerformanceLogger("Brain XAI Model Loading (vgg16.h5)"):
-            xai_model = tf.keras.models.load_model(BRAIN_XAI_MODEL_PATH)
-            logger.info("✅ Brain XAI model loaded successfully")
-    except Exception as e:
-        logger.error(f"❌ Error loading Brain XAI model: {e}")
 
 if os.path.exists(PNEUMONIA_MODEL_PATH):
     try:
@@ -989,164 +993,41 @@ async def predict_pneumonia(file: UploadFile = File(...)):
         logger.error(f"❌ Error in pneumonia prediction - ID: {request_id}: {e}")
         logger.error(f"🔍 Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-def blindness_gradcam(model, img_array, original_image):
-    with PerformanceLogger("Blindness Grad-CAM"):
-        try:
-            # Use the last conv layer's name from your model summary, e.g., 'conv5_block3_out' for ResNet, or inspect your model for the correct layer
-            last_conv_layer_name = 'mixed10'  # Change as needed
-            grad_model = tf.keras.models.Model(
-                [model.inputs],
-                [model.get_layer(last_conv_layer_name).output, model.output]
-            )
-            with tf.GradientTape() as tape:
-                conv_outputs, predictions = grad_model(img_array)
-                pred_index = tf.argmax(predictions[0])
-                class_channel = predictions[:, pred_index]
-            grads = tape.gradient(class_channel, conv_outputs)
-            pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-            conv_outputs = conv_outputs[0]
-            heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
-            heatmap = tf.squeeze(heatmap)
-            heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-8)
-            heatmap_np = heatmap.numpy()
-            heatmap_resized = cv2.resize(heatmap_np, (original_image.shape[1], original_image.shape[0]))
-            heatmap_colored = np.uint8(255 * heatmap_resized)
-            heatmap_colored = cv2.applyColorMap(heatmap_colored, cv2.COLORMAP_JET)
-            img_rgb = cv2.cvtColor(original_image, cv2.COLOR_RGB2BGR)
-            superimposed_img = cv2.addWeighted(img_rgb, 0.6, heatmap_colored, 0.4, 0)
-            result = cv2.cvtColor(superimposed_img, cv2.COLOR_BGR2RGB)
-            return result
-        except Exception as e:
-            logger.error(f"❌ Blindness Grad-CAM failed: {str(e)}")
-            return None
-def blindness_lime(model, img_np):
-    explainer = lime_image.LimeImageExplainer()
-    def predict_fn(imgs):
-        imgs = np.array(imgs)
-        imgs_scaled = (imgs * 255).astype(np.uint8)
-        return model.predict(imgs_scaled)
-    explanation = explainer.explain_instance(
-        img_np.astype(np.double) / 255.0,
-        predict_fn,
-        top_labels=1,
-        hide_color=0,
-        num_samples=1000,
-        
-    )
-    temp, mask = explanation.get_image_and_mask(
-        explanation.top_labels[0],
-        positive_only=True,
-        num_features=10,
-        hide_rest=False
-    )
-    lime_img = mark_boundaries(temp, mask)
-    lime_img = (lime_img * 255).astype(np.uint8)
-    return lime_img
 
-def blindness_shap(model, img_np):
-    try:
-        # Preprocess
-        img_input = img_np[np.newaxis, ...]  # shape (1, H, W, C)
-        pred_class = int(np.argmax(model.predict(img_input)))
-
-        # Background: use 5 copies of the same image (or better: a dataset mean)
-        background = np.stack([img_np] * 5, axis=0)
-
-        # Ensure model outputs a single tensor
-        if isinstance(model.output, list):
-            model = tf.keras.Model(inputs=model.input, outputs=model.output[0])
-
-        with tf.device('/CPU:0'):
-            explainer = shap.GradientExplainer((model.input, model.output), background)
-        shap_values = explainer.shap_values(img_input, nsamples=25)
-
-
-        # Get SHAP values for the predicted class
-        shap_vals = shap_values[pred_class][0]  # shape (H, W, C)
-
-        # ✅ Reduce to grayscale via mean absolute
-        shap_gray = np.mean(np.abs(shap_vals), axis=-1)
-
-        # Normalize to [0, 255]
-        shap_norm = (shap_gray - shap_gray.min()) / (shap_gray.max() - shap_gray.min() + 1e-8)
-        shap_uint8 = np.uint8(shap_norm * 255)
-
-        # Resize to original image shape (from 224x224 if needed)
-        if shap_uint8.shape != img_np.shape[:2]:
-            shap_uint8 = cv2.resize(shap_uint8, (img_np.shape[1], img_np.shape[0]))
-
-        # Apply colormap
-        shap_colored = cv2.applyColorMap(shap_uint8, cv2.COLORMAP_JET)
-
-        # Convert original image to uint8 for overlay
-        original_uint8 = (img_np * 255).astype(np.uint8)
-
-        # Overlay
-        overlay = cv2.addWeighted(original_uint8, 0.6, shap_colored, 0.4, 0)
-        return overlay
-
-    except Exception as e:
-        logger.error(f"SHAP failed: {e}")
-        return None
-
-
+# Keep other endpoints with basic logging
 @app.post("/predict/blindness")
 async def predict_blindness(file: UploadFile = File(...)):
     logger.info("👁️ Blindness prediction request received")
     if blindness_model is None:
         logger.error("❌ Blindness model not loaded")
         raise HTTPException(status_code=503, detail="Blindness detection model not loaded")
+    
     try:
         with PerformanceLogger("Blindness Prediction"):
             contents = await file.read()
             processed_image = preprocess_image(contents)
-            original_image = get_original_image(contents)
             prediction = blindness_model.predict(processed_image)
+            
             predicted_class = int(np.argmax(prediction[0]))
             confidence = float(prediction[0][predicted_class])
-            # Adjust confidence for frontend as per requirements
-            if confidence > 0.90:
-                frontend_confidence = confidence
-            else:
-                import random
-                frontend_confidence = round(random.uniform(85, 90), 2) / 100
+            
             severity_map = {
-                0: "No DR", 1: "Mild DR", 2: "Moderate DR",
+                0: "No DR", 1: "Mild DR", 2: "Moderate DR", 
                 3: "Severe DR", 4: "Proliferative DR"
             }
-
-            # Grad-CAM
-            gradcam_img = blindness_gradcam(blindness_model, processed_image, original_image)
-            gradcam_img_b64 = image_to_base64(gradcam_img) if gradcam_img is not None else None
-
-            # LIME
-            lime_img = blindness_lime(blindness_model, original_image)
-            lime_img_b64 = image_to_base64(lime_img) if lime_img is not None else None
-
-            # SHAP
-            shap_img = blindness_shap(blindness_model, original_image)
-            if shap_img is None:
-                logger.info("🔄 SHAP failed, using attention visualization fallback for blindness module.")
-                shap_img = create_attention_visualization(original_image, predicted_class, confidence)
-            shap_img_b64 = image_to_base64(shap_img) if shap_img is not None else None
-
+            
             result = {
                 "prediction": predicted_class,
                 "severity": severity_map[predicted_class],
-                "confidence": frontend_confidence,
-                "raw_prediction": prediction[0].tolist(),
-                "explanation": {
-                    "gradcam_image": gradcam_img_b64,
-                    "lime_image": lime_img_b64,
-                    "shap_image": shap_img_b64
-                }
+                "confidence": confidence
             }
+            
             logger.info(f"✅ Blindness prediction: {result['severity']} (confidence: {confidence:.3f})")
             return result
+            
     except Exception as e:
         logger.error(f"❌ Error in blindness prediction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 def real_lime_explanation(model, image_np):
     # image_np: shape (H, W, 3), uint8 or float32 in [0,255]
     explainer = lime_image.LimeImageExplainer()
@@ -1195,57 +1076,17 @@ def real_shap_explanation(model, image_np):
         print(f"SHAP failed: {e}")
         return None  # Fallback will be used in the endpoint
 
-def preprocess_for_vgg_xai(image_bytes, target_size=(224, 224)):
-    """Prepares image specifically for the VGG16 XAI model."""
-    try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize(target_size)
-        img_array = np.array(image) / 255.0
-        return np.expand_dims(img_array, axis=0), np.array(image)
-    except Exception as e:
-        logger.error(f"❌ Error preprocessing for VGG XAI model: {e}")
-        raise
-
-def create_brain_gradcam(model, img_array, original_image, class_index):
-    """Generates Grad-CAM specifically for the VGG16 brain tumor model."""
-    try:
-        last_conv_layer_name = 'block5_conv3'
-        grad_model = tf.keras.models.Model(
-            [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
-        )
-        with tf.GradientTape() as tape:
-            last_conv_layer_output, preds = grad_model(img_array)
-            class_channel = preds[:, class_index]
-        
-        grads = tape.gradient(class_channel, last_conv_layer_output)
-        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-        last_conv_layer_output = last_conv_layer_output[0]
-        heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
-        heatmap = tf.squeeze(heatmap)
-        heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-8)
-        
-        heatmap_resized = cv2.resize(heatmap.numpy(), (original_image.shape[1], original_image.shape[0]))
-        heatmap_colored = np.uint8(255 * heatmap_resized)
-        heatmap_colored = cv2.applyColorMap(heatmap_colored, cv2.COLORMAP_JET)
-        
-        superimposed_img = cv2.addWeighted(cv2.cvtColor(original_image, cv2.COLOR_RGB2BGR), 0.6, heatmap_colored, 0.4, 0)
-        return image_to_base64(superimposed_img)
-    except Exception as e:
-        logger.error(f"❌ Brain Grad-CAM failed: {e}")
-        return None
-    
-# --- Replace the existing /predict/brain-tumor endpoint with this ---
-
 @app.post("/predict/brain-tumor")
 async def predict_brain_tumor(file: UploadFile = File(...)):
     logger.info("🧠 Brain tumor prediction request received")
-    if brain_tumor_model is None or xai_model is None: # Check for both models
-        logger.error("❌ A brain tumor model is not loaded")
-        raise HTTPException(status_code=503, detail="A required brain tumor model is not loaded")
+    if brain_tumor_model is None:
+        logger.error("❌ Brain tumor model not loaded")
+        raise HTTPException(status_code=503, detail="Brain tumor model not loaded")
 
     try:
         with PerformanceLogger("Brain Tumor Prediction"):
             contents = await file.read()
-            processed_image = preprocess_brain_image(contents)
+            processed_image = preprocess_brain_image(contents)  # shape (1, H, W, 3)
             original_image = processed_image[0] if processed_image.shape[0] == 1 else processed_image
 
             prediction = brain_tumor_model.predict(processed_image)
@@ -1256,12 +1097,22 @@ async def predict_brain_tumor(file: UploadFile = File(...)):
                 2: "No Tumor Found", 3: "Pituitary Tumor"
             }
 
-            # --- Grad-CAM from vgg16.h5 ---
-            logger.info("🔬 Generating Grad-CAM from VGG16 model...")
-            xai_processed_image, original_image_224 = preprocess_for_vgg_xai(contents)
-            gradcam_img_b64 = create_brain_gradcam(xai_model, xai_processed_image, original_image_224, predicted_class)
+            # --- Grad-CAM with fallback ---
+            try:
+                gradcam_img = get_gradcam_overlay(
+                    brain_tumor_model,
+                    processed_image,
+                    last_conv_layer_name='block6d_project_conv',  # or 'top_conv'
+                    class_index=predicted_class,
+                    alpha=0.4
+                )
+                gradcam_img_b64 = gradcam_img
+            except Exception as gradcam_error:
+                logger.warning(f"⚠️ Grad-CAM failed: {gradcam_error}. Using fallback intensity heatmap.")
+                fallback_img = create_intensity_heatmap(original_image, predicted_class)
+                gradcam_img_b64 = image_to_base64(fallback_img)
 
-            # --- LIME (from your original code, unchanged) ---
+            # --- LIME (no fallback needed, rarely fails) ---
             try:
                 lime_img = real_lime_explanation(brain_tumor_model, original_image)
                 lime_img_b64 = image_to_base64(lime_img) if lime_img is not None else None
@@ -1269,7 +1120,14 @@ async def predict_brain_tumor(file: UploadFile = File(...)):
                 logger.error(f"❌ LIME failed: {lime_error}")
                 lime_img_b64 = None
 
-            # --- SHAP Fallback (from your original code, unchanged) ---
+            # --- SHAP with fallback ---
+            # try:
+            #     shap_img = real_shap_explanation(brain_tumor_model, original_image)
+            #     shap_img_b64 = image_to_base64(shap_img) if shap_img is not None else None
+            #     if shap_img_b64 is None:
+            #         raise Exception("SHAP returned None")
+            # except Exception as shap_error:
+            #     logger.warning(f"⚠️ SHAP failed: {shap_error}. Using fallback attention visualization.")
             attention_img = create_attention_visualization(original_image, predicted_class, confidence)
             shap_img_b64 = image_to_base64(attention_img)
 
@@ -1278,11 +1136,12 @@ async def predict_brain_tumor(file: UploadFile = File(...)):
                 "gradcam_image": gradcam_img_b64,
                 "lime_image": lime_img_b64,
                 "shap_image": shap_img_b64
+                # Add more XAI outputs here as you implement them
             }
 
             result = {
                 "prediction": predicted_class,
-                "tumor_type": tumor_map.get(predicted_class, "Unknown"),
+                "tumor_type": tumor_map[predicted_class],
                 "confidence": confidence,
                 "raw_prediction": prediction[0].tolist(),
                 "explanation": explanation

@@ -2,7 +2,11 @@
 import React, { useState } from 'react';
 import ImageUploader from '../components/ImageUploader';
 import ResultDisplay from '../components/ResultDisplay';
+import BrainTumorExplanation from '../components/BrainTumorExplanation';
 import { predictBrainTumor } from '../utils/api';
+import { FaDownload } from 'react-icons/fa';
+
+
 import './ModulePage.css';
 
 function BrainTumorClassification() {
@@ -14,6 +18,7 @@ function BrainTumorClassification() {
     try {
       setIsLoading(true);
       setError(null);
+      setResult(null);
       const response = await predictBrainTumor(file);
       setResult(response);
     } catch (err) {
@@ -26,7 +31,18 @@ function BrainTumorClassification() {
 
   return (
     <div className="module-page">
-      <h1>Brain Tumor Classification 🧠</h1>
+      <div className="header-with-button">
+        <h1>Brain Tumor Classification 🧠</h1>
+        <a
+          href="https://drive.google.com/drive/folders/1jtvzza12mM1n8H-ldvfJMjBdQ_JRIv4L?usp=sharing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="download-button"
+        >
+          <FaDownload style={{ marginRight: '8px' }} />
+          Download Test Dataset
+        </a>
+      </div>
       <p className="module-description">
         Upload a brain MRI image to detect and classify brain tumors.
       </p>
@@ -57,7 +73,14 @@ function BrainTumorClassification() {
           )}
         </div>
       </div>
-      
+
+      {/* XAI Section appears only when result and explanation exist */}
+      {result && result.explanation && (
+        <div className="xai-section" style={{ marginTop: "2rem" }}>
+          <BrainTumorExplanation explanationData={result.explanation} />
+        </div>
+      )}
+
       <div className="info-section">
         <h2>About Brain Tumor Classification 🔍</h2>
         <p>

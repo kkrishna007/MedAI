@@ -43,16 +43,6 @@ function PneumoniaExplanation({ explanationData }) {
       </div>
       
       <div className="explanation-visuals">
-        <div className="explanation-visual">
-          <h3>Original Chest X-ray</h3>
-          <img 
-            src={`data:image/png;base64,${explanationData.original_image}`} 
-            alt="Original chest X-ray" 
-            className="medical-image"
-          />
-          <p className="image-description">The input chest X-ray image analyzed by the AI model.</p>
-        </div>
-        
         {explanationData.gradcam_image && (
           <div className="explanation-visual">
             <h3>Intensity Heat Map</h3>
@@ -78,8 +68,7 @@ function PneumoniaExplanation({ explanationData }) {
               className="medical-image"
             />
             <p className="image-description">
-              <strong>Green boundaries:</strong> Superpixel regions that support the pneumonia diagnosis.<br/>
-              <strong>Red boundaries:</strong> Regions that contradict the diagnosis.<br/>
+              <strong>Yellow boundaries:</strong> Superpixel regions that support the pneumonia diagnosis.<br/>
               LIME creates local explanations by perturbing image regions and analyzing how changes affect the model's prediction using 1000 samples for medical accuracy.
             </p>
           </div>
@@ -94,9 +83,9 @@ function PneumoniaExplanation({ explanationData }) {
               className="medical-image"
             />
             <p className="image-description">
-              <strong>Purple/Dark areas:</strong> Low feature activity with minimal diagnostic relevance.<br/>
-              <strong>Green/Yellow areas:</strong> Moderate feature convergence indicating areas of interest.<br/>
               <strong>Bright Yellow areas:</strong> High feature activity where intensity, edge, and texture patterns strongly converge.<br/>
+              <strong>Green/Yellow areas:</strong> Moderate feature convergence indicating areas of interest.<br/> 
+              <strong>Purple/Dark areas:</strong> Low feature activity with minimal diagnostic relevance.<br/>          
               This visualization uses the VIRIDIS colormap to show regions where multiple image analysis techniques identify potential diagnostic features.
             </p>
           </div>

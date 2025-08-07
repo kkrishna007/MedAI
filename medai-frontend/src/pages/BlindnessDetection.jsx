@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import ImageUploader from '../components/ImageUploader';
 import ResultDisplay from '../components/ResultDisplay';
+import BlindnessExplanation from '../components/BlindnessExplanation';
 import { predictBlindness } from '../utils/api';
 import './ModulePage.css';
 
@@ -14,6 +15,7 @@ function BlindnessDetection() {
     try {
       setIsLoading(true);
       setError(null);
+      setResult(null);
       const response = await predictBlindness(file);
       setResult(response);
     } catch (err) {
@@ -57,6 +59,13 @@ function BlindnessDetection() {
           )}
         </div>
       </div>
+
+      {/* XAI Section appears only when result and explanation exist */}
+      {result && result.explanation && (
+        <div className="xai-section" style={{ marginTop: "2rem" }}>
+          <BlindnessExplanation explanationData={result.explanation} />
+        </div>
+      )}
       
       <div className="info-section">
         <h2>About Diabetic Retinopathy 🔍</h2>
